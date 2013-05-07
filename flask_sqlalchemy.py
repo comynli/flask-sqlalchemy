@@ -14,6 +14,7 @@ import re
 import sys
 import time
 import functools
+import random
 import sqlalchemy
 from math import ceil
 from functools import partial
@@ -213,6 +214,15 @@ class _SignallingSession(Session):
             if bind_key is not None:
                 state = get_state(self.app)
                 return state.db.get_engine(self.app, bind=bind_key)
+            elif self._flushing:
+                state = get_state(self.app)
+                if 'master' in self.app.config.get('SQLALCHEMY_BINDS', dict()).keys():
+                    return state.db.get_engine(self.app, bind='master')
+            else:
+                state = get_state(self.app)
+                slaves = [x for x in self.app.config.get('SQLALCHEMY_BINDS', dict()).keys() if x.startswith('slave_')]
+                if slaves:
+                    return state.db.get_engine(self.app, bind=random.choice(slaves))
         return Session.get_bind(self, mapper, clause)
 
 
