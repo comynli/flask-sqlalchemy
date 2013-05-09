@@ -201,6 +201,7 @@ class _SignallingSession(Session):
     def __init__(self, db, autocommit=False, autoflush=False, **options):
         self.app = db.get_app()
         self._model_changes = {}
+        self._autocommit = autocommit
         Session.__init__(self, autocommit=autocommit, autoflush=autoflush,
                          extension=db.session_extensions,
                          bind=db.engine,
@@ -215,13 +216,13 @@ class _SignallingSession(Session):
                 state = get_state(self.app)
                 return state.db.get_engine(self.app, bind=bind_key)
             elif self._flushing:
-                state = get_state(self.app)
-                if 'master' in self.app.config.get('SQLALCHEMY_BINDS', dict()).keys():
-                    return state.db.get_engine(self.app, bind='master')
+                self.autocommit = self._autocommit
+                return Session.get_bind(self, mapper, clause)
             else:
                 state = get_state(self.app)
                 slaves = [x for x in self.app.config.get('SQLALCHEMY_BINDS', dict()).keys() if x.startswith('slave_')]
                 if slaves:
+                    self.autocommit = True
                     return state.db.get_engine(self.app, bind=random.choice(slaves))
         return Session.get_bind(self, mapper, clause)
 
@@ -364,6 +365,8 @@ class BaseQuery(orm.Query):
     :class:`~sqlalchemy.orm.query.Query` class and has all the methods of a
     standard query as well.
     """
+
+
 
     def get_or_404(self, ident):
         """Like :meth:`get` but aborts with 404 if not found instead of
